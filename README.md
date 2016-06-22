@@ -9,26 +9,26 @@ You're provided with a binary file and an address of a remote server where the b
 
 # preparing the environment
 Generate RSA key:
-```
-openssl genrsa -out srv.key 2048
+```bash
+$ openssl genrsa -out srv.key 2048
 ````
 Prepare certificate for the key:
-```
-openssl req -new -key srv.key -x509 -days 3653 -out srv.crt
+```bash
+$ openssl req -new -key srv.key -x509 -days 3653 -out srv.crt
 ```
 Merge them into one file:
-```
-cat srv.key srv.crt > srv.pem
+```bash
+$ cat srv.key srv.crt > srv.pem
 ```
 Run your server:
-```
-socat OPENSSL-LISTEN:4443,bind=0.0.0.0,method=SSL23,cipher=RSA:HIGH,verify=0,cert=./keys/srv.pem,fork EXEC:./rich-man-stripped
+```bash
+$ socat OPENSSL-LISTEN:4443,bind=0.0.0.0,method=SSL23,cipher=RSA:HIGH,verify=0,cert=./keys/srv.pem,fork EXEC:./rich-man-stripped
 ```
 During RE and client application development you can attach to the process with IDA local or remote debugger and get a clue about specific things a bit faster.
 
 # the binary file
 The file you're given is just a x64 ELF executable. 
-```
+```bash
 $ file rich-man-stripped
 rich-man-stripped: ELF 64-bit LSB  executable, x86-64, version 1 (SYSV), statically linked, BuildID[sha1]=ba18079f42e0cf7752010dc62a1ed4e6701f2479, stripped
 ```
@@ -55,7 +55,7 @@ Having spent some time on the file, I come up with the following observations th
 * In some cases compiler generates code that looks weird. For example the following expression ``` for (d,s) in e.iter_mut().zip(n.iter()) {
       *d = *s;
 } ``` was compiled to 32 pieces like 
-```
+```asm
 .text:00000000004093F4                 mov     al, [rsi]
 .text:00000000004093F6                 mov     byte ptr [rsp+458h+var_58], al
 .text:00000000004093FD                 cmp     rdx, 1
@@ -81,7 +81,7 @@ It's easy to notice that these functions are called from the "main_crypto_functi
 So the three objects are created. Then 32 bytes on stack are zeroed using MMX instructions and filled with 32 bytes of random data. Later, this data and the second 32 byte buffer are passed to the function, that I called ```curve25519_base``` it's actually the corresponding Rust function located [here](https://github.com/DaGenix/rust-crypto/blob/master/src/curve25519.rs#L2152). The use Curve25519 is easy to identify by the following features:
 * the use of 9 - base point
 * the way 32 randon bytes are turned into a point on the curve:
-```
+```c
 e[0] &= 248;
 e[31] &= 127;
 e[31] |= 64;
@@ -108,10 +108,10 @@ How to identify Blake2b function:
 ## Key Derivation function
 When the common secret is obtained, two keys are generated. The first is used to encrypt server to client communication and the second - to encrypt client to server communication. The Blake2b keyed hash function is used as KDF. This process is depicted in the picture:
 
-```PICTURE 6 - KDF using BLAKE```
+![Key derivation function](picture6.png)
 
 In the both cases the common secret as used as a key for the keyed hash function, "SERVER_KEY" and "CLIENT_KEY" strings are used as messages. The high-level formulas are:
-```
+```python
 server2client_key = Blake2b(key=shared_secret, msg="SERVER_KEY")
 client2server_key = Blake2b(key=shared_secret, msg="CLIENT_KEY")
 ```
@@ -127,24 +127,24 @@ For implementation of the client I took a basic example from [stackoverflow](htt
 ## key agreement
 
 At first we generate 32 random bytes and turn them into a point on Curve25519 - it will be our private key:
-```
+```c
 RAND_bytes((unsigned char*)client_sk, sizeof(client_sk));
 client_sk[0] &= 248;
 client_sk[31] &= 127;
 client_sk[31] |= 64;
 ```
 Then compute public key:
-```
+```c
 crypto_scalarmult_curve25519_base(client_pk, client_sk);
 ```
 And later we can compute shared value:
-```
+```c
 crypto_scalarmult_curve25519(shared_secret, client_sk,  server_pk);
 ```
 
 ## key derivation function
 To compute shared secret we use Blake2b function and hash public keys and the common value we got during execution of Diffie-Hellman protocol:
-```
+```c
 memcpy(accumulator, server_pk, sizeof(server_pk));
 memcpy(accumulator + sizeof(server_pk), client_pk, sizeof(client_pk));
 memcpy(accumulator + sizeof(server_pk) + sizeof(client_pk), shared_secret, sizeof(shared_secret));
@@ -153,7 +153,7 @@ crypto_generichash_blake2b(shared_secret, sizeof(shared_secret), accumulator, si
 ```
 
 Then we compute session keys:
-```
+```c
 const char server_key_str[] = "SERVER_KEY";
 crypto_generichash_blake2b_state state1;
 crypto_generichash_blake2b_init(&state1, server_key_str, 10, 32);
@@ -165,7 +165,7 @@ The other session key is computed in the same manner.
 
 ## message encryption
 All messages are ancrypted in the following way:
-```
+```c
 if(crypto_aead_chacha20poly1305_encrypt(buffer+2, &ciphertext_len, message, strlen(message), NULL, 0, NULL, nonce_out, client_key) == 0)
 {
     nonce_out[0] += 1;
