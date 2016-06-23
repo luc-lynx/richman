@@ -24,7 +24,7 @@ Run your server:
 ```bash
 $ socat OPENSSL-LISTEN:4443,bind=0.0.0.0,method=SSL23,cipher=RSA:HIGH,verify=0,cert=./keys/srv.pem,fork EXEC:./rich-man-stripped
 ```
-During RE and client application development you can attach to the process with IDA local or remote debugger and get a clue about specific things a bit faster.
+During RE and client application development you can attach to richman's process with IDA's local or remote debugger and see what's going on inside it.
 
 # the binary file
 The file you're given is just a x64 ELF executable. 
