@@ -78,7 +78,7 @@ It's easy to notice that these functions are called from the "main_crypto_functi
 
 ![Main crypto function](picture4.png)
 
-So the three objects are created. Then 32 bytes on stack are zeroed using MMX instructions and filled with 32 bytes of random data. Later, this data and the second 32 byte buffer are passed to the function, that I called ```curve25519_base``` it's actually the corresponding Rust function located [here](https://github.com/DaGenix/rust-crypto/blob/master/src/curve25519.rs#L2152). The use Curve25519 is easy to identify by the following features:
+So the three objects are created. Then 32 bytes on stack are zeroed using MMX instructions and filled with 32 bytes of random data. Later, this data and the second 32 byte buffer are passed to the function, that I named ```curve25519_base```. It's actually the corresponding Rust's function located [here](https://github.com/DaGenix/rust-crypto/blob/master/src/curve25519.rs#L2152). The use of Curve25519 is easy to identify by the following features:
 * the use of 9 - base point
 * the way 32 randon bytes are turned into a point on the curve:
 ```c
